@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Airtel Agent Scanner</title>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 body{font-family:Arial,sans-serif;background:#f5f5f5;margin:0;padding:20px;text-align:center}
 header{background:#e60000;color:white;padding:15px;border-radius:10px}
 #preview{width:100%;max-width:350px;border:2px solid #e60000;border-radius:10px;margin-top:15px}
 #result{font-size:26px;font-weight:bold;color:#e60000;margin-top:15px}
 button{background:#e60000;color:white;border:none;padding:12px 20px;border-radius:8px;font-size:16px;margin-top:10px}
+input{font-size:18px;padding:10px;width:200px;text-align:center;margin-top:10px}
 </style>
 </head>
 <body>
@@ -20,46 +20,50 @@ button{background:#e60000;color:white;border:none;padding:12px 20px;border-radiu
 <img id="preview"><br>
 <button onclick="scanNumber()">Scan Number</button>
 <div id="result"></div>
+<div id="editBox" style="display:none">
+<p style="color:black;font-size:16px">Check / Fix if wrong:</p>
+<input id="fixInput" maxlength="8" inputmode="numeric"><br>
+<button onclick="copyNum()">Copy Number</button>
+</div>
 <script>
 let imgFile=null;
 document.getElementById('file').onchange=e=>{
   imgFile=e.target.files[0];
   document.getElementById('preview').src=URL.createObjectURL(imgFile);
   document.getElementById('result').innerText="";
+  document.getElementById('editBox').style.display="none";
 };
-function cleanImage(file){
-  return new Promise(res=>{
-    const img=new Image();
-    img.onload=()=>{
-      const c=document.createElement('canvas');
-      const scale=2;
-      c.width=img.width*scale; c.height=img.height*scale;
-      const ctx=c.getContext('2d');
-      ctx.drawImage(img,0,0,c.width,c.height);
-      let d=ctx.getImageData(0,0,c.width,c.height);
-      for(let i=0;i<d.data.length;i+=4){
-        let g=(d.data[i]+d.data[i+1]+d.data[i+2])/3;
-        let v=g>130?255:0;
-        d.data[i]=d.data[i+1]=d.data[i+2]=v;
-      }
-      ctx.putImageData(d,0,0);
-      res(c.toDataURL());
-    };
-    img.src=URL.createObjectURL(file);
-  });
-}
 async function scanNumber(){
   if(!imgFile){alert("Take a photo first");return;}
-  document.getElementById('result').innerText="Scanning... please wait";
-  const cleanedImg=await cleanImage(imgFile);
-  const {data:{text}} = await Tesseract.recognize(cleanedImg,'eng',{tessedit_char_whitelist:'0123456789',tessedit_pageseg_mode:'6'});
-  const cleaned=text.replace(/[^0-9]/g,'');
-  const match=cleaned.match(/\d{8}/);
-  if(match){
-    document.getElementById('result').innerHTML="✅ Agent Number Found:<br>"+match[0]+"<br><small style='color:black;font-size:14px'>Check it matches photo. Found raw: "+cleaned+"</small>";
-  }else{
-    document.getElementById('result').innerText="❌ No number found. Try again closer. Found: "+cleaned;
+  document.getElementById('result').innerText="Scanning with cloud OCR... please wait";
+  let form=new FormData();
+  form.append("file",imgFile);
+  form.append("apikey","helloworld");
+  form.append("OCREngine","2");
+  form.append("scale","true");
+  try{
+    let r=await fetch("https://api.ocr.space/parse/image",{method:"POST",body:form});
+    let j=await r.json();
+    let text=j.ParsedResults && j.ParsedResults[0] ? j.ParsedResults[0].ParsedText : "";
+    let cleaned=text.replace(/[^0-9]/g,'');
+    let match=cleaned.match(/\d{8}/);
+    if(match){
+      document.getElementById('result').innerHTML="✅ Agent Number Found:<br>"+match[0];
+      document.getElementById('fixInput').value=match[0];
+      document.getElementById('editBox').style.display="block";
+    }else{
+      document.getElementById('result').innerText="❌ No 8-digit number found. Found: "+cleaned+" - Try retaking closer";
+      document.getElementById('fixInput').value=cleaned.slice(0,8);
+      document.getElementById('editBox').style.display="block";
+    }
+  }catch(e){
+    document.getElementById('result').innerText="❌ Internet error. Check data and try again.";
   }
+}
+function copyNum(){
+  let v=document.getElementById('fixInput').value;
+  navigator.clipboard.writeText(v);
+  alert("Copied: "+v);
 }
 </script>
 </body>
