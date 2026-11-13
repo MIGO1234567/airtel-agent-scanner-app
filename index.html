@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Airtel Agent Scanner</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f5f5f5;
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+}
+header {
+  background: #e60000;
+  color: white;
+  padding: 20px;
+  border-radius: 12px;
+}
+h2 { margin-top: 25px; }
+video, canvas {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 12px;
+  background: #222;
+}
+button {
+  background: #e60000;
+  color: white;
+  border: 0;
+  padding: 15px 20px;
+  margin: 8px;
+  border-radius: 8px;
+  font-size: 16px;
+}
+#result {
+  background: white;
+  padding: 18px;
+  margin-top: 20px;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.number {
+  font-size: 25px;
+  font-weight: bold;
+  color: #e60000;
+}
+</style>
+</head>
+<body>
+
+<header>
+<h1>Airtel Money</h1>
+<p>Agent Number Scanner</p>
+</header>
+
+<h2>Scan Agent Number</h2>
+
+<video id="camera" autoplay playsinline></video>
+
+<br>
+
+<button onclick="startCamera()">Open Camera</button>
+<button onclick="scanNumber()">Scan Number</button>
+
+<canvas id="photo" hidden></canvas>
+
+<div id="result">
+<h3>Detected Agent Number</h3>
+<p id="number" class="number">No number scanned</p>
+<p id="status">Open your camera to begin.</p>
+<div id="copyArea"></div>
+</div>
+
+<script>
+const video = document.getElementById("camera");
+const canvas = document.getElementById("photo");
+const statusText = document.getElementById("status");
+const numberText = document.getElementById("number");
+const copyArea = document.getElementById("copyArea");
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+      audio: false
+    });
+    video.srcObject = stream;
+    statusText.textContent = "Camera ready. Point it at the agent number.";
+  } catch (error) {
+    statusText.textContent =
+      "Camera error. Allow camera permission and use HTTPS.";
+  }
+}
+
+async function scanNumber() {
+  if (!video.srcObject || !video.videoWidth) {
+    statusText.textContent = "Please open the camera first.";
+    return;
+  }
+
+  statusText.textContent = "Reading numbers... Please wait.";
+  numberText.textContent = "Scanning...";
+  copyArea.innerHTML = "";
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  canvas.getContext("2d").drawImage(
+    video, 0, 0, canvas.width, canvas.height
+  );
+
+  try {
+    const result = await Tesseract.recognize(
+      canvas,
+      "eng"
+    );
+
+    const text = result.data.text;
+    const matches = text.match(/\d(?:[\d\s-]*\d)?/g) || [];
+
+    const numbers = [...new Set(
+      matches
+        .map(n => n.replace(/\D/g, ""))
+        .filter(n => n.length >= 5)
+    )];
+
+    if (numbers.length > 0) {
+      numberText.textContent = numbers[0];
+      statusText.textContent =
+        "Check the detected digits before using them.";
+
+      copyArea.innerHTML = "";
+
+      numbers.forEach(n => {
+        const row = document.createElement("p");
+        row.textContent = n + " ";
+
+        const btn = document.createElement("button");
+        btn.textContent = "Copy";
+        btn.onclick = () => {
+          navigator.clipboard.writeText(n);
+          statusText.textContent = "Number copied!";
+        };
+
+        row.appendChild(btn);
+        copyArea.appendChild(row);
+      });
+
+    } else {
+      numberText.textContent = "No number found";
+      statusText.textContent =
+        "Try again with better lighting and a clearer image.";
+    }
+
+  } catch (error) {
+    numberText.textContent = "Scan failed";
+    statusText.textContent = "Please try again.";
+  }
+}
+</script>
+
+</body>
+  </html>
